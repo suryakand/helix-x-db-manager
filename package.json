@@ -1,6 +1,6 @@
 {
   "name": "@helix-x/db-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Numbered-SQL schema migrations with a ledger, and plain-SQL export and import, for PostgreSQL and SQLite -- with an interactive CLI.",
   "license": "ISC",
   "type": "module",
