@@ -1,0 +1,21 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "@helix-x/db-manager",
+  "includeVersion": true,
+  "readme": "README.md",
+  "hideGenerator": true,
+  "categorizeByGroup": true,
+  "sort": ["static-first", "alphabetical"],
+  "searchInComments": true,
+  "highlightLanguages": ["bash", "dockerfile", "javascript", "js", "json", "sql", "ts", "typescript"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "treatWarningsAsErrors": false,
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": true
+  }
+}

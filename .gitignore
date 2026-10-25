@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+*.tgz
+
+# Generated API documentation
+docs/
+
+coverage/
+
+# Databases and exports the tests and the example leave behind
+*.sqlite
+*.sqlite.pre-migrate-*
+example/database/exports/

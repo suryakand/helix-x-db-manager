@@ -1,0 +1,83 @@
+name: API docs
+
+# Runs after the publish workflow, never alongside it — the docs should describe
+# a version that actually shipped.
+#
+# `workflow_run` rather than `on: release`: the publish job creates its release
+# with the default GITHUB_TOKEN, and events raised by that token deliberately do
+# not trigger further workflows. A `release` trigger would simply never fire.
+on:
+  workflow_run:
+    # Must match publish.yml's `name:` exactly.
+    workflows: ['Publish package']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race for the Pages environment, and let a newer one win.
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # A failed or cancelled publish should not publish docs for it. Manual runs
+    # carry no workflow_run payload, so they are allowed through explicitly.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit the publish ran on — that is the code that was released,
+          # before the workflow pushed its version bump on top.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report the version being documented
+        run: |
+          echo "::notice::Documenting $(node -p "require('./package.json').name")@$(node -p "require('./package.json').version") from ${{ github.sha }}"
+
+      - name: Build docs
+        # Warnings are failures here: typedoc.json turns on link, export and
+        # coverage validation, so a broken {@link} or a newly exported symbol
+        # with no doc comment stops the deploy instead of shipping a gap.
+        run: npx typedoc --treatWarningsAsErrors
+
+      - name: Guard against an empty build
+        run: |
+          test -f docs/index.html || { echo "docs/index.html missing"; exit 1; }
+          count=$(find docs -name '*.html' | wc -l)
+          echo "Generated $count pages."
+          # A real build is ~60 pages; anything tiny means the entry point broke.
+          [ "$count" -ge 20 ] || { echo "Only $count pages — refusing to deploy"; exit 1; }
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

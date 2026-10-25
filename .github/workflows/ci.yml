@@ -1,0 +1,80 @@
+name: CI
+
+# Checks every change before it reaches main. Pushes to main are checked by
+# "Publish package" itself, which runs the same steps before publishing.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request makes the older run moot.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # The PostgreSQL tests skip without PG_TEST_URL; this server makes them run.
+    # pg_dump and psql must be the server's major version or newer, so the
+    # server is pinned to the client the runner image ships (16 on 24.04).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dbm
+          POSTGRES_PASSWORD: dbm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dbm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PG_TEST_URL: postgres://dbm:dbm@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install PostgreSQL client tools
+        run: |
+          command -v pg_dump >/dev/null && command -v psql >/dev/null \
+            || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+          pg_dump --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Same strictness as the docs deploy, so a missing doc comment or broken
+      # {@link} is caught on the pull request rather than after a release.
+      - name: Check API docs
+        run: npx typedoc --treatWarningsAsErrors
+
+      # What would be published: the file list, and that the CLI entry exists.
+      - name: Check package contents
+        run: |
+          npm pack --dry-run
+          test -f dist/cli.js || { echo "dist/cli.js missing"; exit 1; }
+          head -1 dist/cli.js | grep -q '^#!/usr/bin/env node' \
+            || { echo "dist/cli.js has no shebang"; exit 1; }
